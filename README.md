@@ -1,4 +1,0 @@
-bmcleaner
-=========
-
-Bookmark cleaner
