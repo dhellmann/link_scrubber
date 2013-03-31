@@ -1,7 +1,12 @@
 import logging
-import Queue
+from six.moves import queue
 import threading
-import urlparse
+try:
+    # Python 2
+    import urlparse
+except:
+    # Python 3
+    import urllib.parse as urlparse
 
 import pinboard
 import requests
@@ -139,10 +144,10 @@ def process_bookmarks(credentials, dry_run, add_only, stop_early,
     date_client = _get_client(*credentials)
 
     # Queue to hold the bookmarks to be processed
-    bookmark_queue = Queue.Queue()
+    bookmark_queue = queue.Queue()
 
     # Queue to hold the bookmarks to be updated
-    update_queue = Queue.Queue()
+    update_queue = queue.Queue()
 
     check_bookmarks_threads = [
         threading.Thread(

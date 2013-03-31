@@ -35,9 +35,12 @@ setup(
     platforms=['Any'],
 
     provides=['linkscrubber'],
-    install_requires=['requesets'],
+    install_requires=[
+        'requests',
+        'six',
+    ],
 
-    packages=find_packages(),
+    packages=find_packages(exclude=['tests']),
     include_package_data=True,
 
     entry_points={
