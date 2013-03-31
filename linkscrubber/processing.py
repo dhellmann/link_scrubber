@@ -80,7 +80,7 @@ def _check_bookmarks_worker(bookmark_queue, update_queue):
         except Exception as err:
             LOG.error('Could not retrieve %s (%s): %s' %
                       (bm['href'], bm['description'], err))
-        if response.status_code / 100 == 3:
+        if response.status_code // 100 == 3:
             # 3xx status means a redirect
             try:
                 update_queue.put((bm, response.headers['location']))
