@@ -259,9 +259,9 @@ def main(argv=sys.argv[1:]):
         bookmark_queue.put(None)
     for t in check_bookmarks_threads:
         LOG.debug('waiting for %s', t.name)
-        t.wait()
+        t.join()
     update_queue.put(None)
     LOG.debug('waiting for %s', update_thread.name)
-    update_thread.wait()
+    update_thread.join()
 
     return 0
