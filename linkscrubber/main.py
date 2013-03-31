@@ -4,7 +4,10 @@
 import argparse
 import getpass
 import logging
+import Queue
 import sys
+import threading
+import urlparse
 
 import pkg_resources
 
@@ -14,6 +17,8 @@ LOG = None
 
 
 def _get_argument_parser():
+    """Create the argparse parser for the program.
+    """
     dist = pkg_resources.get_distribution('linkscrubber')
 
     parser = argparse.ArgumentParser(
@@ -44,21 +49,29 @@ def _get_argument_parser():
         dest='dry_run',
         default=False,
         action='store_true',
-        help='Show the changes, but do not make them',
+        help='show the changes, but do not make them',
     )
     behavior_group.add_argument(
         '--redirect-site',
         dest='redirect_sites',
         action='append',
         default=['feedproxy.google.com'],
-        help='Replace redirects originating from these sites',
+        help='replace redirects originating from these sites',
     )
     behavior_group.add_argument(
         '--all-redirects',
         dest='all_redirects',
         action='store_true',
         default=False,
-        help='Replace all links that cause a redirect',
+        help='replace all links that cause a redirect',
+    )
+    behavior_group.add_argument(
+        '-N', '--num-workers',
+        dest='num_workers',
+        action='store',
+        type=int,
+        default=4,
+        help='how many bookmarks to check at one time',
     )
 
     output_group = parser.add_argument_group('output')
@@ -81,6 +94,10 @@ def _get_argument_parser():
 
 
 def _configure_logging(verbosity):
+    """Set up the logging module for messages
+    going to stdout, including the global
+    LOG variable used in this module.
+    """
     global LOG
 
     # Set up output
@@ -100,6 +117,8 @@ def _configure_logging(verbosity):
 
 
 def _get_client(username, password, token):
+    """Create a pinboard client with the provided credentials.
+    """
     # Make sure we have a password
     if username and not password:
         password = getpass.getpass()
@@ -118,19 +137,131 @@ def _get_client(username, password, token):
     return client
 
 
+def _get_bookmarks(client, bookmark_queue, check_all, sites):
+    """Use the client to find the dates when bookmarks were added, query
+    for the bookmarks for that date, and put them in the bookmarks
+    queue.
+    """
+    sites = set(sites)
+    dates = client.dates()
+    LOG.info('processing %d dates', len(dates))
+    for d in dates:
+        bookmarks = client.posts(date=d['date'])
+        LOG.info('found %s posts on %s', len(bookmarks), d['date'])
+        kept = 0
+        for bm in bookmarks:
+            if check_all:
+                keep = True
+            else:
+                parsed_url = urlparse.urlparse(bm['href'])
+                keep = parsed_url.netloc in sites
+            if keep:
+                LOG.info('processing %s (%s)', bm['href'], bm['description'])
+                bookmark_queue.put(bm)
+                kept += 1
+        LOG.info('processed %d posts from %s', kept, d['date'])
+
+
+def _check_bookmarks_worker(bookmark_queue, update_queue):
+    LOG.debug('starting bookmark worker')
+    while True:
+        bm = bookmark_queue.get()
+        if not bm:
+            break
+        LOG.debug('examining %s (%s)', bm['href'], bm['description'])
+        bookmark_queue.task_done()
+
+
+def _update_worker(client, update_queue):
+    """Pull update items out of the queue and make the changes on pinboard.
+    """
+    LOG.debug('starting update worker')
+
+
+def _dry_run_worker(update_queue):
+    """Show the updates that would be made.
+    Used in --dry-run mode.
+    """
+    LOG.debug('starting dry-run worker')
+    while True:
+        update = update_queue.get()
+        if not update:
+            break
+        bm, new_url = update
+        LOG.info('changing %s to %s', bm['href'], new_url)
+
+
 def main(argv=sys.argv[1:]):
     parser = _get_argument_parser()
     arguments = parser.parse_args(argv)
 
     _configure_logging(len(arguments.verbosity))
 
-    client = _get_client(
+    date_client = _get_client(
         arguments.user,
         arguments.password,
         arguments.token,
     )
 
-    d = client.dates()
-    print len(d)
+    # Queue to hold the bookmarks to be processed
+    bookmark_queue = Queue.Queue()
+
+    # Queue to hold the bookmarks to be updated
+    update_queue = Queue.Queue()
+
+    check_bookmarks_threads = [
+        threading.Thread(
+            target=_check_bookmarks_worker,
+            args=(bookmark_queue, update_queue),
+            name='check-bookmarks-%d' % i,
+        )
+        for i in range(arguments.num_workers)
+    ]
+
+    if arguments.dry_run:
+        update_thread = threading.Thread(
+            target=_dry_run_worker,
+            args=(update_queue,),
+            name='update-thread',
+        )
+    else:
+        # I don't know if the pinboard client is thread-safe, so make
+        # another one to use for the update worker.
+        update_client = _get_client(
+            arguments.user,
+            arguments.password,
+            arguments.token,
+        )
+        update_thread = threading.Thread(
+            target=_update_worker,
+            args=(update_client, update_queue),
+            name='update-thread',
+        )
+    update_thread.setDaemon(True)
+
+    # Start all of the workers
+    update_thread.start()
+    for t in check_bookmarks_threads:
+        t.setDaemon(True)
+        t.start()
+
+    # Get the bookmarks that need to be processed
+    _get_bookmarks(
+        date_client,
+        bookmark_queue,
+        arguments.all_redirects,
+        arguments.redirect_sites,
+    )
+    # Sent poison pills to the workers to make them exit when they are
+    # done processing the real data
+    for t in check_bookmarks_threads:
+        LOG.debug('telling %s to stop', t.name)
+        bookmark_queue.put(None)
+    for t in check_bookmarks_threads:
+        LOG.debug('waiting for %s', t.name)
+        t.wait()
+    update_queue.put(None)
+    LOG.debug('waiting for %s', update_thread.name)
+    update_thread.wait()
 
     return 0
