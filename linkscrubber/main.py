@@ -52,6 +52,13 @@ def _get_argument_parser():
         help='show the changes, but do not make them',
     )
     behavior_group.add_argument(
+        '--add-only', '-A',
+        dest='add_only',
+        default=False,
+        action='store_true',
+        help='add new copies of the links but do not delete',
+    )
+    behavior_group.add_argument(
         '--redirect-site',
         dest='redirect_sites',
         action='append',
@@ -194,7 +201,7 @@ def _check_bookmarks_worker(bookmark_queue, update_queue):
         bookmark_queue.task_done()
 
 
-def _update_worker(client, update_queue):
+def _update_worker(client, update_queue, add_only):
     """Pull update items out of the queue and make the changes on pinboard.
     """
     LOG.debug('starting update worker')
@@ -204,7 +211,10 @@ def _update_worker(client, update_queue):
         if not update:
             break
         bm, new_url = update
-        LOG.info('changing %s to %s', bm['href'], new_url)
+        if add_only:
+            LOG.info('adding %s', new_url)
+        else:
+            LOG.info('changing %s to %s', bm['href'], new_url)
         try:
             client.add(
                 url=new_url,
@@ -216,7 +226,14 @@ def _update_worker(client, update_queue):
         except Exception as err:
             LOG.error('Failed to create new post for %s: %s', new_url, err)
         else:
-            client.delete(bm['href'])
+            if not add_only:
+                LOG.debug('deleting old post %s', bm['href'])
+                try:
+                    client.delete(bm['href'])
+                except Exception as err:
+                    LOG.error('Failed to remove old post for %s: %s',
+                              bm['href'], err)
+        num_updates += 1
     LOG.info('Updated %d bookmarks', num_updates)
 
 
@@ -276,7 +293,7 @@ def main(argv=sys.argv[1:]):
         )
         update_thread = threading.Thread(
             target=_update_worker,
-            args=(update_client, update_queue),
+            args=(update_client, update_queue, arguments.add_only),
             name='update-thread',
         )
     update_thread.setDaemon(True)
