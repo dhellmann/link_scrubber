@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-PROJECT = 'bmcleaner'
+PROJECT = 'linkscrubber'
 VERSION = '0.1'
 
 # Bootstrap installation of Distribute
@@ -18,7 +18,7 @@ setup(
     name=PROJECT,
     version=VERSION,
 
-    description='pinboard.in or delicious.com bookmark cleaner',
+    description='pinboard.in bookmark cleaner',
     long_description=long_description,
 
     author='Doug Hellmann',
@@ -34,15 +34,17 @@ setup(
 
     platforms=['Any'],
 
-    provides=['bmcleaner'],
-    install_requires=['pydelicious'],
+    provides=['linkscrubber'],
+    install_requires=[],
 
     packages=find_packages(),
     include_package_data=True,
 
     entry_points={
-        #'console_scripts': [ 'venvw_hook = virtualenvwrapper.hook_loader:main' ],
-        },
+        'console_scripts': [
+            'linkscrubber = linkscrubber.main:main'
+        ],
+    },
 
     zip_safe=False,
-    )
+)

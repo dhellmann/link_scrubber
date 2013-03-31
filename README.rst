@@ -1,5 +1,5 @@
-===========
- bmcleaner
-===========
+===============
+ Link Scrubber
+===============
 
-pinboard.in or delicious.com bookmark cleaner
+pinboard.in bookmark cleaner
