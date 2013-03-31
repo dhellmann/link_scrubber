@@ -6,8 +6,8 @@ import getpass
 import logging
 import sys
 
+import pinboard
 import pkg_resources
-
 from linkscrubber import processing
 
 LOG = None
@@ -137,11 +137,12 @@ def _configure_logging(verbosity):
 
     logging.basicConfig(
         level=log_level,
-        format='%(message)s',
+        format='%(threadName)s:%(message)s',
     )
 
     if verbosity > 2:
         logging.getLogger('requests').setLevel(logging.DEBUG)
+        pinboard._debug = True
     else:
         logging.getLogger('requests').setLevel(logging.WARNING)
 
