@@ -1,5 +1,42 @@
-===============
- Link Scrubber
-===============
+=================================================
+ Link Scrubber -- a pinboard.in bookmark cleaner
+=================================================
 
-pinboard.in bookmark cleaner
+With the announcement that Google Reader is being shuttered, I decided
+I needed to go through my pinboard.in bookmarks and update any that
+point to a feedproxy.google.com URL while their redirecting service is
+still online. This script does that automatically.
+
+Running
+=======
+
+To use it, pass your pinboard.in user token to the ``-t`` option, or
+use your username and password with the ``--user`` and ``--password``
+options.
+
+What does it do?
+================
+
+``link_scrubber`` processes all of your bookmarks, looking for those
+that redirect. It adds a new bookmark with the target of the redirect
+and all the same metadata from the original link. By default, only
+URLs from feedproxy.google.com are processed, but there are command
+line options to process all redirects or to add more sites.
+
+The links are processed in small batches to reduce the load of
+individual calls against the pinboard.in API server, so it can take a
+while to process. Once a batch of links is fetched, it is checked in
+parallel to speed things up a little.
+
+Disclaimer
+==========
+
+You should back up your account before running the script. I have done
+some testing, but only against one account. Yours might behave
+differently.
+
+Reporting Bugs
+==============
+
+Use the github bug tracker at
+https://github.com/dhellmann/link_scrubber to report problems.
