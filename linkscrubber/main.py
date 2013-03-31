@@ -9,9 +9,9 @@ import sys
 import threading
 import urlparse
 
-import pkg_resources
-
 import pinboard
+import pkg_resources
+import requests
 
 LOG = None
 
@@ -113,6 +113,11 @@ def _configure_logging(verbosity):
         format='%(message)s',
     )
 
+    if verbosity > 2:
+        logging.getLogger('requests').setLevel(logging.DEBUG)
+    else:
+        logging.getLogger('requests').setLevel(logging.WARNING)
+
     LOG = logging.getLogger(__name__)
 
 
@@ -169,6 +174,19 @@ def _check_bookmarks_worker(bookmark_queue, update_queue):
         if not bm:
             break
         LOG.debug('examining %s (%s)', bm['href'], bm['description'])
+        try:
+            response = requests.head(bm['href'])
+        except Exception as err:
+            LOG.error('Could not retrieve %s (%s): %s' %
+                      (bm['href'], bm['description'], err))
+        if response.status_code / 100 == 3:
+            # 3xx status means a redirect
+            try:
+                update_queue.put((bm, response.headers['location']))
+            except KeyError:
+                # No new location for the redirect?
+                LOG.error('redirect for %s (%s) did not include location',
+                          bm['href'], bm['description'])
         bookmark_queue.task_done()
 
 
@@ -176,6 +194,24 @@ def _update_worker(client, update_queue):
     """Pull update items out of the queue and make the changes on pinboard.
     """
     LOG.debug('starting update worker')
+    while True:
+        update = update_queue.get()
+        if not update:
+            break
+        bm, new_url = update
+        LOG.info('changing %s to %s', bm['href'], new_url)
+        try:
+            client.add(
+                url=new_url,
+                description=bm['description'],
+                extended=bm['extended'],
+                tags=bm['tags'],
+                date=bm['time_parsed'][:3],
+            )
+        except Exception as err:
+            LOG.error('Failed to create new post for %s: %s', new_url, err)
+        else:
+            client.delete(bm['href'])
 
 
 def _dry_run_worker(update_queue):
