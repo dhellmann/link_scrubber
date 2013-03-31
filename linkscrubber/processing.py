@@ -77,17 +77,21 @@ def _check_bookmarks_worker(bookmark_queue, update_queue):
         LOG.debug('examining %s (%s)', bm['href'], bm['description'])
         try:
             response = requests.head(bm['href'])
+            LOG.debug('response status: %s', response.status_code)
         except Exception as err:
             LOG.error('Could not retrieve %s (%s): %s' %
                       (bm['href'], bm['description'], err))
         if response.status_code // 100 == 3:
             # 3xx status means a redirect
             try:
+                LOG.debug('preparing to update %s' % bm['href'])
                 update_queue.put((bm, response.headers['location']))
             except KeyError:
                 # No new location for the redirect?
                 LOG.error('redirect for %s (%s) did not include location',
                           bm['href'], bm['description'])
+        else:
+            LOG.debug('no redirect for %s (%s)', bm['href'], bm['description'])
         bookmark_queue.task_done()
 
 
@@ -116,6 +120,7 @@ def _update_worker(client, update_queue, add_only):
         except Exception as err:
             LOG.error('Failed to create new post for %s: %s', new_url, err)
         else:
+            LOG.debug('added %s', new_url)
             if not add_only:
                 LOG.debug('deleting old post %s', bm['href'])
                 try:
@@ -123,6 +128,8 @@ def _update_worker(client, update_queue, add_only):
                 except Exception as err:
                     LOG.error('Failed to remove old post for %s: %s',
                               bm['href'], err)
+                else:
+                    LOG.debug('deleted %s', bm['href'])
         num_updates += 1
     LOG.info('Updated %d bookmarks', num_updates)
 
