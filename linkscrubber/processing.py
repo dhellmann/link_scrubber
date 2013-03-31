@@ -49,6 +49,7 @@ def _get_bookmarks(client, bookmark_queue, stop_early, check_all, sites):
             bookmarks = client.posts(date=d['date'])
         except Exception as err:
             LOG.error('Could not retrieve posts from %s: %s', d['date'], err)
+            continue
         kept = 0
         for bm in bookmarks:
             if check_all:
