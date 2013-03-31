@@ -188,7 +188,7 @@ def _dry_run_worker(update_queue):
         if not update:
             break
         bm, new_url = update
-        LOG.info('changing %s to %s', bm['href'], new_url)
+        LOG.info('DRY RUN changing %s to %s', bm['href'], new_url)
 
 
 def main(argv=sys.argv[1:]):
