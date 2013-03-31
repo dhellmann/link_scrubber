@@ -151,8 +151,11 @@ def _get_bookmarks(client, bookmark_queue, check_all, sites):
     dates = client.dates()
     LOG.info('processing %d dates', len(dates))
     for d in dates:
-        bookmarks = client.posts(date=d['date'])
-        LOG.info('found %s posts on %s', len(bookmarks), d['date'])
+        LOG.info('looking at posts from %s', d['date'])
+        try:
+            bookmarks = client.posts(date=d['date'])
+        except Exception as err:
+            LOG.error('Could not retrieve posts from %s: %s', d['date'], err)
         kept = 0
         for bm in bookmarks:
             if check_all:
@@ -164,7 +167,8 @@ def _get_bookmarks(client, bookmark_queue, check_all, sites):
                 LOG.info('processing %s (%s)', bm['href'], bm['description'])
                 bookmark_queue.put(bm)
                 kept += 1
-        LOG.info('processed %d posts from %s', kept, d['date'])
+        if kept:
+            LOG.info('found %s posts to process from %s', kept, d['date'])
 
 
 def _check_bookmarks_worker(bookmark_queue, update_queue):
@@ -194,6 +198,7 @@ def _update_worker(client, update_queue):
     """Pull update items out of the queue and make the changes on pinboard.
     """
     LOG.debug('starting update worker')
+    num_updates = 0
     while True:
         update = update_queue.get()
         if not update:
@@ -212,6 +217,7 @@ def _update_worker(client, update_queue):
             LOG.error('Failed to create new post for %s: %s', new_url, err)
         else:
             client.delete(bm['href'])
+    LOG.info('Updated %d bookmarks', num_updates)
 
 
 def _dry_run_worker(update_queue):
