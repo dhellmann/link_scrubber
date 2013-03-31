@@ -73,6 +73,23 @@ def _get_argument_parser():
         help='replace all links that cause a redirect',
     )
     behavior_group.add_argument(
+        '--stop-early',
+        dest='stop_early',
+        action='store_true',
+        default=False,
+        help=('stop processing on the '
+              'first day without any redirecting links'),
+    )
+    behavior_group.add_argument(
+        '--no-stop-early',
+        dest='stop_early',
+        action='store_false',
+        help=('process all posts, '
+              'not just up to the first day without a redirect link'),
+    )
+
+    perf_group = parser.add_argument_group('performance')
+    perf_group.add_argument(
         '-N', '--num-workers',
         dest='num_workers',
         action='store',
@@ -149,7 +166,7 @@ def _get_client(username, password, token):
     return client
 
 
-def _get_bookmarks(client, bookmark_queue, check_all, sites):
+def _get_bookmarks(client, bookmark_queue, stop_early, check_all, sites):
     """Use the client to find the dates when bookmarks were added, query
     for the bookmarks for that date, and put them in the bookmarks
     queue.
@@ -176,6 +193,9 @@ def _get_bookmarks(client, bookmark_queue, check_all, sites):
                 kept += 1
         if kept:
             LOG.info('found %s posts to process from %s', kept, d['date'])
+        elif stop_early:
+            LOG.info('no redirects found, stopping processing early')
+            break
 
 
 def _check_bookmarks_worker(bookmark_queue, update_queue):
@@ -308,6 +328,7 @@ def main(argv=sys.argv[1:]):
     _get_bookmarks(
         date_client,
         bookmark_queue,
+        arguments.stop_early,
         arguments.all_redirects,
         arguments.redirect_sites,
     )
