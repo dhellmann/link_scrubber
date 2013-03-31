@@ -7,13 +7,6 @@ I needed to go through my pinboard.in bookmarks and update any that
 point to a feedproxy.google.com URL while their redirecting service is
 still online. This script does that automatically.
 
-Running
-=======
-
-To use it, pass your pinboard.in user token to the ``-t`` option, or
-use your username and password with the ``--user`` and ``--password``
-options.
-
 What does it do?
 ================
 
@@ -27,6 +20,24 @@ The links are processed in small batches to reduce the load of
 individual calls against the pinboard.in API server, so it can take a
 while to process. Once a batch of links is fetched, it is checked in
 parallel to speed things up a little.
+
+Installing
+==========
+
+Install via pip::
+
+  $ pip install linkscrubber
+
+Running
+=======
+
+To use it, pass your pinboard.in user token to the ``-t`` option, or
+use your username and password with the ``--user`` and ``--password``
+options.
+
+For the full list of options, use::
+
+  $ linkscrubber -h
 
 Disclaimer
 ==========
