@@ -20,8 +20,10 @@ def _get_argument_parser():
 
     parser = argparse.ArgumentParser(
         description="pinboard.in link cleaner",
-        version=dist.version,
     )
+
+    parser.add_argument('--version', action='version',
+                        version='%(prog)s ' + dist.version)
 
     auth_group = parser.add_argument_group(
         'authentication',
