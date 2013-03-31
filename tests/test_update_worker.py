@@ -4,7 +4,7 @@ import mock
 
 
 def test_replace():
-    responses = [
+    responses = iter([
         ({
             'href': 'http://example.com/blah',
             'description': 'example link',
@@ -13,9 +13,9 @@ def test_replace():
             'time_parsed': (2013, 3, 31, 9, 9, 9)},
          'http://newlink.com/blah'),
         None,
-    ]
+    ])
     q = mock.Mock()
-    q.get = iter(responses).next
+    q.get = lambda *x, **k: next(responses)
 
     client = mock.Mock()
 
@@ -34,7 +34,7 @@ def test_replace():
 
 
 def test_add_only():
-    responses = [
+    responses = iter([
         ({
             'href': 'http://example.com/blah',
             'description': 'example link',
@@ -43,9 +43,9 @@ def test_add_only():
             'time_parsed': (2013, 3, 31, 9, 9, 9)},
          'http://newlink.com/blah'),
         None,
-    ]
+    ])
     q = mock.Mock()
-    q.get = iter(responses).next
+    q.get = lambda *x, **k: next(responses)
 
     client = mock.Mock()
     client.delete.side_effect = AssertionError('should not delete')
