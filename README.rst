@@ -31,7 +31,13 @@ Installing
 
 Install via pip::
 
+  $ pip install git+http://github.com/mgan59/python-pinboard.git@v1.0#egg=python-pinboard
   $ pip install linkscrubber
+
+.. note:: 
+
+  Unfortunately, python-pinboard does not have a PyPI release, yet, so
+  it needs to be installed first.
 
 Running
 =======
