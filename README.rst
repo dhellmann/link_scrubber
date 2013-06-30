@@ -31,7 +31,7 @@ Installing
 
 Install via pip::
 
-  $ pip install git+http://github.com/mgan59/python-pinboard.git@v1.0#egg=python-pinboard
+  $ pip install git+http://github.com/mgan59/python-pinboard.git#egg=python-pinboard
   $ pip install linkscrubber
 
 .. note:: 
