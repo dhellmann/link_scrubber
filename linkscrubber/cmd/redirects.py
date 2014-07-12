@@ -21,7 +21,7 @@ LOG = logging.getLogger(__name__)
 class Redirects(command.Command):
     "Replace redirects with the destination link."
 
-    log = logging.getLogger(__name__)
+    log = LOG
 
     def get_parser(self, prog_name):
         parser = super(Redirects, self).get_parser(prog_name)
