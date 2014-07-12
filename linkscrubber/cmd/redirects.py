@@ -8,14 +8,58 @@ except:
     # Python 3
     import urllib.parse as urlparse
 
+from cliff import command
 import pinboard
 import requests
-
-LOG = logging.getLogger(__name__)
 
 # The number of threads to use for checking links. The user probably
 # doesn't need to control this.
 NUM_WORKERS = 4
+
+LOG = logging.getLogger(__name__)
+
+
+class Redirects(command.Command):
+    "Replace redirects with the destination link."
+
+    log = logging.getLogger(__name__)
+
+    def get_parser(self, prog_name):
+        parser = super(Redirects, self).get_parser(prog_name)
+        parser.add_argument(
+            '--add-only', '-A',
+            dest='add_only',
+            default=False,
+            action='store_true',
+            help='add new copies of the links but do not delete any data',
+        )
+        parser.add_argument(
+            '--redirect-site',
+            dest='redirect_sites',
+            action='append',
+            default=['feedproxy.google.com'],
+            help=('replace redirects originating from these sites, '
+                  'defaults to [feedproxy.google.com], repeat the '
+                  'option to add sites'),
+        )
+        parser.add_argument(
+            '--all-redirects',
+            dest='all_redirects',
+            action='store_true',
+            default=False,
+            help=('replace all links that cause a redirect, '
+                  'not just the --redirect-sites values'),
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        process_bookmarks(
+            self.app.auth_args,
+            self.app.options.dry_run,
+            parsed_args.add_only,
+            parsed_args.all_redirects,
+            parsed_args.redirect_sites,
+        )
 
 
 def _get_client(username, password, token):
@@ -35,37 +79,27 @@ def _get_client(username, password, token):
     return client
 
 
-def _get_bookmarks(client, bookmark_queue, stop_early, check_all, sites):
+def _get_bookmarks(client, bookmark_queue, check_all, sites):
     """Use the client to find the dates when bookmarks were added, query
     for the bookmarks for that date, and put them in the bookmarks
     queue.
     """
-    sites = set(sites)
-    dates = client.dates()
-    LOG.info('processing %d dates', len(dates))
-    for d in dates:
-        LOG.info('looking at posts from %s', d['date'])
-        try:
-            bookmarks = client.posts(date=d['date'])
-        except Exception as err:
-            LOG.error('Could not retrieve posts from %s: %s', d['date'], err)
-            continue
-        kept = 0
-        for bm in bookmarks:
-            if check_all:
-                keep = True
-            else:
-                parsed_url = urlparse.urlparse(bm['href'])
-                keep = parsed_url.netloc in sites
-            if keep:
-                LOG.info('processing %s (%s)', bm['href'], bm['description'])
-                bookmark_queue.put(bm)
-                kept += 1
-        if kept:
-            LOG.info('found %s posts to process from %s', kept, d['date'])
-        elif stop_early:
-            LOG.info('no redirects found, stopping processing early')
-            break
+    LOG.info('downloading bookmarks')
+    bookmarks = client.posts()
+    LOG.info('have %d bookmarks', len(bookmarks))
+    kept = 0
+    for bm in bookmarks:
+        if check_all:
+            keep = True
+        else:
+            parsed_url = urlparse.urlparse(bm['href'])
+            keep = parsed_url.netloc in sites
+        if keep:
+            LOG.info('processing %s (%s)', bm['href'], bm['description'])
+            bookmark_queue.put(bm)
+            kept += 1
+    if kept:
+        LOG.info('found %s posts to process', kept)
 
 
 def _check_bookmarks_worker(bookmark_queue, update_queue):
@@ -147,7 +181,7 @@ def _dry_run_worker(update_queue):
         LOG.info('DRY RUN changing %s to %s', bm['href'], new_url)
 
 
-def process_bookmarks(credentials, dry_run, add_only, stop_early,
+def process_bookmarks(credentials, dry_run, add_only,
                       all_redirects, redirect_sites):
     date_client = _get_client(*credentials)
 
@@ -193,7 +227,6 @@ def process_bookmarks(credentials, dry_run, add_only, stop_early,
     _get_bookmarks(
         date_client,
         bookmark_queue,
-        stop_early,
         all_redirects,
         redirect_sites,
     )

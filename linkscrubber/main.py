@@ -1,11 +1,12 @@
 """Main program for linkscrubber
 """
 
-import argparse
 import getpass
 import logging
 import sys
 
+from cliff import app
+from cliff import commandmanager
 import pinboard
 import pkg_resources
 from linkscrubber import processing
@@ -13,111 +14,58 @@ from linkscrubber import processing
 LOG = None
 
 
-def _get_argument_parser():
-    """Create the argparse parser for the program.
-    """
-    dist = pkg_resources.get_distribution('linkscrubber')
+class LinkScrubber(app.App):
 
-    parser = argparse.ArgumentParser(
-        description="pinboard.in link cleaner",
-    )
+    def __init__(self):
+        version = pkg_resources.get_distribution('linkscrubber').version
+        super(LinkScrubber, self).__init__(
+            description='pinboard.in cleanup app',
+            version=version,
+            command_manager=commandmanager.CommandManager('linkscrubber'),
+        )
 
-    parser.add_argument('--version', action='version',
-                        version='%(prog)s ' + dist.version)
+    def build_option_parser(self, description, version, argparse_kwargs=None):
+        parser = super(LinkScrubber, self).build_option_parser(
+            description, version, argparse_kwargs,
+        )
 
-    auth_group = parser.add_argument_group(
-        'authentication',
-        'provide either a token or a username and password',
-    )
-    identity = auth_group.add_mutually_exclusive_group()
+        auth_group = parser.add_argument_group(
+            'authentication',
+            'provide either a token or a username and password',
+        )
+        identity = auth_group.add_mutually_exclusive_group()
 
-    identity.add_argument(
-        '--user', '-u',
-        help="pinboard.in username",
-    )
-    identity.add_argument(
-        '--token', '-t',
-        help='pinboard.in API token',
-    )
+        identity.add_argument(
+            '--user', '-u',
+            help="pinboard.in username",
+        )
+        identity.add_argument(
+            '--token', '-t',
+            help='pinboard.in API token',
+        )
+        auth_group.add_argument(
+            '--password', '-p',
+            help="pinboard.in password",
+        )
 
-    auth_group.add_argument(
-        '--password', '-p',
-        help="pinboard.in password",
-    )
+        parser.add_argument(
+            '--dry-run', '-n',
+            dest='dry_run',
+            default=False,
+            action='store_true',
+            help='show the changes, but do not make them',
+        )
+        return parser
 
-    behavior_group = parser.add_argument_group(
-        'behavior',
-        'general behavioral controls',
-    )
-    behavior_group.add_argument(
-        '--add-only', '-A',
-        dest='add_only',
-        default=False,
-        action='store_true',
-        help='add new copies of the links but do not delete any data',
-    )
-    behavior_group.add_argument(
-        '--redirect-site',
-        dest='redirect_sites',
-        action='append',
-        default=['feedproxy.google.com'],
-        help=('replace redirects originating from these sites, '
-              'defaults to [feedproxy.google.com], repeat the '
-              'option to add sites'),
-    )
-    behavior_group.add_argument(
-        '--all-redirects',
-        dest='all_redirects',
-        action='store_true',
-        default=False,
-        help=('replace all links that cause a redirect, '
-              'not just the --redirect-sites values'),
-    )
+    @property
+    def auth_args(self):
+        return (self.options.user, self.options.password, self.options.token)
 
-    stop_group = parser.add_argument_group(
-        'stopping',
-        'options to control when to end processing',
-    )
-    stop_group.add_argument(
-        '--dry-run', '-n',
-        dest='dry_run',
-        default=False,
-        action='store_true',
-        help='show the changes, but do not make them',
-    )
-    stop_group.add_argument(
-        '--stop-early',
-        dest='stop_early',
-        action='store_true',
-        default=False,
-        help=('stop processing on the '
-              'first day without any redirecting links'),
-    )
-    stop_group.add_argument(
-        '--no-stop-early',
-        dest='stop_early',
-        action='store_false',
-        help=('process all posts, '
-              'not just up to the first day without a redirect link'),
-    )
-
-    output_group = parser.add_argument_group('output')
-    output_group.add_argument(
-        '-V', '--verbose',
-        dest='verbosity',
-        action='append_const',
-        const=1,
-        default=[1],
-        help='repeat for more detailed output',
-    )
-    output_group.add_argument(
-        '-q', '--quiet',
-        dest='verbosity',
-        action='store_const',
-        const=[],
-        help='turn off output',
-    )
-    return parser
+    def initialize_app(self, argv):
+        # Make sure we have a password
+        if self.options.user and not self.options.password:
+            self.options.password = getpass.getpass()
+        return
 
 
 def _configure_logging(verbosity):
@@ -150,22 +98,5 @@ def _configure_logging(verbosity):
 
 
 def main(argv=sys.argv[1:]):
-    parser = _get_argument_parser()
-    arguments = parser.parse_args(argv)
-
-    # Make sure we have a password
-    if arguments.user and not arguments.password:
-        arguments.password = getpass.getpass()
-
-    _configure_logging(len(arguments.verbosity))
-
-    processing.process_bookmarks(
-        (arguments.user, arguments.password, arguments.token),
-        arguments.dry_run,
-        arguments.add_only,
-        arguments.stop_early,
-        arguments.all_redirects,
-        arguments.redirect_sites,
-    )
-
-    return 0
+    app = LinkScrubber()
+    return app.run(argv)

@@ -1,4 +1,4 @@
-from linkscrubber import processing
+from linkscrubber.cmd import redirects
 
 import mock
 
@@ -19,7 +19,7 @@ def test_replace():
 
     client = mock.Mock()
 
-    processing._update_worker(client, q, False)
+    redirects._update_worker(client, q, False)
 
     client.add.assert_called_with(
         url='http://newlink.com/blah',
@@ -50,7 +50,7 @@ def test_add_only():
     client = mock.Mock()
     client.delete.side_effect = AssertionError('should not delete')
 
-    processing._update_worker(client, q, True)
+    redirects._update_worker(client, q, True)
 
     client.add.assert_called_with(
         url='http://newlink.com/blah',
