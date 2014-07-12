@@ -9,12 +9,11 @@ from cliff import app
 from cliff import commandmanager
 import pinboard
 import pkg_resources
-from linkscrubber import processing
-
-LOG = None
 
 
 class LinkScrubber(app.App):
+
+    log = logging.getLogger(__name__)
 
     def __init__(self):
         version = pkg_resources.get_distribution('linkscrubber').version
@@ -57,9 +56,21 @@ class LinkScrubber(app.App):
         )
         return parser
 
-    @property
-    def auth_args(self):
-        return (self.options.user, self.options.password, self.options.token)
+    def get_client(self):
+        """Create a pinboard client.
+        """
+        # Get a pinboard client
+        if self.options.token:
+            self.log.debug('logging in with token')
+        else:
+            self.log.debug('logging in with username and password')
+
+        client = pinboard.open(
+            self.options.user,
+            self.options.password,
+            self.options.token,
+        )
+        return client
 
     def initialize_app(self, argv):
         # Make sure we have a password

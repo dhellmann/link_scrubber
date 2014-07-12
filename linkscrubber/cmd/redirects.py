@@ -9,7 +9,6 @@ except:
     import urllib.parse as urlparse
 
 from cliff import command
-import pinboard
 import requests
 
 # The number of threads to use for checking links. The user probably
@@ -53,30 +52,64 @@ class Redirects(command.Command):
         return parser
 
     def take_action(self, parsed_args):
-        process_bookmarks(
-            self.app.auth_args,
-            self.app.options.dry_run,
-            parsed_args.add_only,
+        date_client = self.app.get_client()
+
+        # Queue to hold the bookmarks to be processed
+        bookmark_queue = queue.Queue()
+
+        # Queue to hold the bookmarks to be updated
+        update_queue = queue.Queue()
+
+        check_bookmarks_threads = [
+            threading.Thread(
+                target=_check_bookmarks_worker,
+                args=(bookmark_queue, update_queue),
+                name='check-bookmarks-%d' % i,
+            )
+            for i in range(NUM_WORKERS)
+        ]
+
+        if self.app.options.dry_run:
+            update_thread = threading.Thread(
+                target=_dry_run_worker,
+                args=(update_queue,),
+                name='update-thread',
+            )
+        else:
+            # I don't know if the pinboard client is thread-safe, so make
+            # another one to use for the update worker.
+            update_client = self.app.get_client()
+            update_thread = threading.Thread(
+                target=_update_worker,
+                args=(update_client, update_queue, parsed_args.add_only),
+                name='update-thread',
+            )
+        update_thread.setDaemon(True)
+
+        # Start all of the workers
+        update_thread.start()
+        for t in check_bookmarks_threads:
+            t.setDaemon(True)
+            t.start()
+
+        # Get the bookmarks that need to be processed
+        _get_bookmarks(
+            date_client,
+            bookmark_queue,
             parsed_args.all_redirects,
             parsed_args.redirect_sites,
         )
-
-
-def _get_client(username, password, token):
-    """Create a pinboard client with the provided credentials.
-    """
-    # Get a pinboard client
-    if token:
-        LOG.debug('logging in with token')
-    else:
-        LOG.debug('logging in with username and password')
-
-    client = pinboard.open(
-        username,
-        password,
-        token,
-    )
-    return client
+        # Sent poison pills to the workers to make them exit when they are
+        # done processing the real data
+        for t in check_bookmarks_threads:
+            LOG.debug('telling %s to stop', t.name)
+            bookmark_queue.put(None)
+        for t in check_bookmarks_threads:
+            LOG.debug('waiting for %s', t.name)
+            t.join()
+        update_queue.put(None)
+        LOG.debug('waiting for %s', update_thread.name)
+        update_thread.join()
 
 
 def _get_bookmarks(client, bookmark_queue, check_all, sites):
@@ -179,65 +212,3 @@ def _dry_run_worker(update_queue):
             break
         bm, new_url = update
         LOG.info('DRY RUN changing %s to %s', bm['href'], new_url)
-
-
-def process_bookmarks(credentials, dry_run, add_only,
-                      all_redirects, redirect_sites):
-    date_client = _get_client(*credentials)
-
-    # Queue to hold the bookmarks to be processed
-    bookmark_queue = queue.Queue()
-
-    # Queue to hold the bookmarks to be updated
-    update_queue = queue.Queue()
-
-    check_bookmarks_threads = [
-        threading.Thread(
-            target=_check_bookmarks_worker,
-            args=(bookmark_queue, update_queue),
-            name='check-bookmarks-%d' % i,
-        )
-        for i in range(NUM_WORKERS)
-    ]
-
-    if dry_run:
-        update_thread = threading.Thread(
-            target=_dry_run_worker,
-            args=(update_queue,),
-            name='update-thread',
-        )
-    else:
-        # I don't know if the pinboard client is thread-safe, so make
-        # another one to use for the update worker.
-        update_client = _get_client(*credentials)
-        update_thread = threading.Thread(
-            target=_update_worker,
-            args=(update_client, update_queue, add_only),
-            name='update-thread',
-        )
-    update_thread.setDaemon(True)
-
-    # Start all of the workers
-    update_thread.start()
-    for t in check_bookmarks_threads:
-        t.setDaemon(True)
-        t.start()
-
-    # Get the bookmarks that need to be processed
-    _get_bookmarks(
-        date_client,
-        bookmark_queue,
-        all_redirects,
-        redirect_sites,
-    )
-    # Sent poison pills to the workers to make them exit when they are
-    # done processing the real data
-    for t in check_bookmarks_threads:
-        LOG.debug('telling %s to stop', t.name)
-        bookmark_queue.put(None)
-    for t in check_bookmarks_threads:
-        LOG.debug('waiting for %s', t.name)
-        t.join()
-    update_queue.put(None)
-    LOG.debug('waiting for %s', update_thread.name)
-    update_thread.join()
