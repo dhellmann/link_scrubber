@@ -1,5 +1,6 @@
 import logging
 from six.moves import queue
+import re
 import threading
 try:
     # Python 2
@@ -40,6 +41,19 @@ class Redirects(command.Command):
             help=('replace redirects originating from these sites, '
                   'defaults to [feedproxy.google.com], repeat the '
                   'option to add sites'),
+        )
+        parser.add_argument(
+            '--redirect-site-regex',
+            dest='redirect_regexes',
+            action='append',
+            default=[
+                '^feeds?\.',
+                '\.feedsportal\.com',
+            ],
+            help=('pattern to match against site name to '
+                  'check for redirects, defaults to '
+                  '["^feeds?\.", "\.feedsportal\.com"], '
+                  'repeat the option to add patterns'),
         )
         parser.add_argument(
             '--all-redirects',
@@ -98,6 +112,7 @@ class Redirects(command.Command):
             bookmark_queue,
             parsed_args.all_redirects,
             parsed_args.redirect_sites,
+            [re.compile(r) for r in parsed_args.redirect_regexes],
         )
         # Sent poison pills to the workers to make them exit when they are
         # done processing the real data
@@ -112,7 +127,7 @@ class Redirects(command.Command):
         update_thread.join()
 
 
-def _get_bookmarks(client, bookmark_queue, check_all, sites):
+def _get_bookmarks(client, bookmark_queue, check_all, sites, regexes):
     """Use the client to find the dates when bookmarks were added, query
     for the bookmarks for that date, and put them in the bookmarks
     queue.
@@ -126,7 +141,11 @@ def _get_bookmarks(client, bookmark_queue, check_all, sites):
             keep = True
         else:
             parsed_url = urlparse.urlparse(bm['href'])
-            keep = parsed_url.netloc in sites
+            keep = (
+                parsed_url.netloc in sites
+                or
+                any(r.match(parsed_url.netloc) for r in regexes)
+            )
         if keep:
             LOG.info('processing %s (%s)', bm['href'], bm['description'])
             bookmark_queue.put(bm)
