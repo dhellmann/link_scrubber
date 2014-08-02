@@ -23,6 +23,14 @@ class LinkScrubber(app.App):
             command_manager=commandmanager.CommandManager('linkscrubber'),
         )
 
+    def configure_logging(self):
+        super(LinkScrubber, self).configure_logging()
+        if self.options.verbose_level > 2:
+            logging.getLogger('requests').setLevel(logging.DEBUG)
+            pinboard._debug = True
+        else:
+            logging.getLogger('requests').setLevel(logging.WARNING)
+
     def build_option_parser(self, description, version, argparse_kwargs=None):
         parser = super(LinkScrubber, self).build_option_parser(
             description, version, argparse_kwargs,
@@ -77,35 +85,6 @@ class LinkScrubber(app.App):
         if self.options.user and not self.options.password:
             self.options.password = getpass.getpass()
         return
-
-
-def _configure_logging(verbosity):
-    """Set up the logging module for messages
-    going to stdout, including the global
-    LOG variable used in this module.
-    """
-    global LOG
-
-    # Set up output
-    log_levels = {
-        0: logging.WARNING,
-        1: logging.INFO,
-        2: logging.DEBUG,
-    }
-    log_level = log_levels.get(verbosity, logging.DEBUG)
-
-    logging.basicConfig(
-        level=log_level,
-        format='%(threadName)s:%(message)s',
-    )
-
-    if verbosity > 2:
-        logging.getLogger('requests').setLevel(logging.DEBUG)
-        pinboard._debug = True
-    else:
-        logging.getLogger('requests').setLevel(logging.WARNING)
-
-    LOG = logging.getLogger(__name__)
 
 
 def main(argv=sys.argv[1:]):
