@@ -147,7 +147,8 @@ def _get_bookmarks(client, bookmark_queue, check_all, sites, regexes):
                 any(r.match(parsed_url.netloc) for r in regexes)
             )
         if keep:
-            LOG.info('processing %s (%s)', bm['href'], bm['description'])
+            LOG.info('adding %s to processing queue (%s)',
+                     bm['href'], bm['description'])
             bookmark_queue.put(bm)
             kept += 1
     if kept:
@@ -194,7 +195,8 @@ def _update_worker(client, update_queue, add_only):
         if add_only:
             LOG.info('adding %s', new_url)
         else:
-            LOG.info('changing %s to %s', bm['href'], new_url)
+            LOG.info('changing %s to %s (%s)',
+                     bm['href'], new_url, bm['description'])
         try:
             client.add(
                 url=new_url,
