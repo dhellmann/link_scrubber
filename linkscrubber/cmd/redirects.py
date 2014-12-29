@@ -49,6 +49,11 @@ class Redirects(command.Command):
             default=[
                 '^feeds?\.',
                 '\.feedsportal\.com',
+                't\.co',
+                '.*\.ly$',
+                'lnkd\.in',
+                'red\.ht',
+                'nyti\.ms',
             ],
             help=('pattern to match against site name to '
                   'check for redirects, defaults to '
