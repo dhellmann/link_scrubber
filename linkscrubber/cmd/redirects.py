@@ -173,17 +173,19 @@ def _check_bookmarks_worker(bookmark_queue, update_queue):
         except Exception as err:
             LOG.error('Could not retrieve %s (%s): %s' %
                       (bm['href'], bm['description'], err))
-        if response.status_code // 100 == 3:
-            # 3xx status means a redirect
-            try:
-                LOG.debug('preparing to update %s' % bm['href'])
-                update_queue.put((bm, response.headers['location']))
-            except KeyError:
-                # No new location for the redirect?
-                LOG.error('redirect for %s (%s) did not include location',
-                          bm['href'], bm['description'])
         else:
-            LOG.debug('no redirect for %s (%s)', bm['href'], bm['description'])
+            if response.status_code // 100 == 3:
+                # 3xx status means a redirect
+                try:
+                    LOG.debug('preparing to update %s' % bm['href'])
+                    update_queue.put((bm, response.headers['location']))
+                except KeyError:
+                    # No new location for the redirect?
+                    LOG.error('redirect for %s (%s) did not include location',
+                              bm['href'], bm['description'])
+            else:
+                LOG.debug('no redirect for %s (%s)',
+                          bm['href'], bm['description'])
         bookmark_queue.task_done()
 
 
